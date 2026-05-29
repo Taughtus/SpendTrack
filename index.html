@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<!--
+  ===================================================================
+  SPENDING TRACKER  -  multi-page version
+  ===================================================================
+  Three "views" share this one page. Only one is visible at a time;
+  the menu switches between them. This is a simple alternative to a
+  multi-page site - faster and works offline.
+
+  Files:
+    index.html  - structure (this file)
+    style.css   - looks
+    app.js      - behaviour
+  ===================================================================
+-->
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spending Tracker</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- ===== PWA setup (Step 9 - installable on a phone) ===== -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <!-- The address bar / status bar tint to match the app's brand -->
+  <meta name="theme-color" content="#1f6a4e" />
+  <!-- iOS-specific: tells Safari the icon and that this is a "web app" -->
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="SpendTrack" />
+  <!-- Browser tab icon (favicon) -->
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ===== Sticky header with menu button and title ===== -->
+  <header class="app-header">
+    <button id="menuBtn" class="menu-btn" aria-label="Open menu">
+      <!-- a simple three-line "hamburger" drawn with spans -->
+      <span></span><span></span><span></span>
+    </button>
+    <div class="header-title" id="headerTitle">Dashboard</div>
+  </header>
+
+  <!-- ===== Menu panel: hidden until the button is clicked ===== -->
+  <nav id="menuPanel" class="menu-panel" aria-hidden="true">
+    <button class="menu-item" data-view="home">Home</button>
+    <button class="menu-item" data-view="upload">Statement upload</button>
+    <button class="menu-item" data-view="savings">Savings tracker</button>
+  </nav>
+
+  <!-- The alert banner sits ABOVE the views so it shows on every page -->
+  <div id="alertBanner"></div>
+
+  <main class="app-main">
+
+    <!-- ============================================================
+         VIEW 1: HOME / DASHBOARD
+         ============================================================ -->
+    <section class="view" id="view-home">
+
+      <!-- Two big totals at the top of the dashboard -->
+      <div class="summary">
+        <div class="stat">
+          <div class="label">This month spend</div>
+          <div class="value" id="monthTotal">£0.00</div>
+        </div>
+        <div class="stat">
+          <div class="label">This month income</div>
+          <div class="value" id="monthIncomeTotal">£0.00</div>
+        </div>
+      </div>
+
+      <!-- Dashboard widget 1: Income by month bar chart -->
+      <div class="chart-card">
+        <h2>Income by month</h2>
+        <div class="chart-box">
+          <canvas id="incomeChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Dashboard widget 2: Top 5 categories by average monthly spend -->
+      <div class="chart-card">
+        <h2>Top 5 categories (avg per month)</h2>
+        <div class="chart-box">
+          <canvas id="top5Chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Dashboard widget 3: SaveCap rating - RAG indicator -->
+      <div class="chart-card">
+        <h2>SaveCap rating</h2>
+        <p class="card-note">Your capacity to save: share of income left after
+          spending. Higher is better.</p>
+        <div id="saveCapBox"></div>
+      </div>
+
+      <!-- Dashboard widget 4: Category spend for a selected month, with %.
+           A month dropdown sits above the visualisation. -->
+      <div class="chart-card">
+        <h2>Category spend (single month)</h2>
+        <div class="month-picker">
+          <label for="monthSelect">Month:</label>
+          <select id="monthSelect"></select>
+        </div>
+        <div class="view-toggle">
+          <button id="viewPie">Pie</button>
+          <button id="viewBar">Bar</button>
+          <button id="viewList">List</button>
+        </div>
+        <div class="chart-box" id="categoryChartBox">
+          <canvas id="categoryChart"></canvas>
+        </div>
+        <div id="categoryListBox"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         VIEW 2: STATEMENT UPLOAD (import + manual add + list)
+         ============================================================ -->
+    <section class="view" id="view-upload">
+
+      <!-- Settings card (Step 8): preferences that affect how the
+           app behaves. Lives here because Statement upload now
+           doubles as the settings page. -->
+      <div class="card">
+        <h2>Settings</h2>
+
+        <label for="saveCapTarget">SaveCap target</label>
+        <p class="card-note">
+          Your goal for the share of income left after spending.
+          Green = you've hit it, amber = at least halfway, red = below halfway.
+        </p>
+        <div class="slider-row">
+          <input type="range" id="saveCapTarget"
+                 min="0" max="40" step="5" value="20" />
+          <div class="slider-value">
+            <span id="saveCapValue">20</span>%
+          </div>
+        </div>
+      </div>
+
+      <!-- The importer -->
+      <div class="card">
+        <h2>Import from bank statement</h2>
+        <label for="fileInput" class="file-label">
+          Choose a CSV or Excel file
+        </label>
+        <input type="file" id="fileInput"
+               accept=".csv,.xlsx,.xls"
+               class="file-input-hidden" />
+        <div id="importArea"></div>
+      </div>
+
+      <!-- Manual transaction entry -->
+      <div class="card">
+        <h2>Add a transaction</h2>
+
+        <!-- Period selector (Step 8): pick a month + year first,
+             then the day below auto-fills to that period. Useful
+             when entering many past transactions in one go. -->
+        <p class="card-note">Pick the period you're entering for.
+          The date below auto-fills to match.</p>
+        <div class="row">
+          <div>
+            <label for="periodMonth">Month</label>
+            <select id="periodMonth"></select>
+          </div>
+          <div>
+            <label for="periodYear">Year</label>
+            <select id="periodYear"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="amount">Amount (£)</label>
+            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0" />
+          </div>
+          <div>
+            <label for="date">Date</label>
+            <input type="date" id="date" />
+          </div>
+        </div>
+
+        <label for="txnType">Type</label>
+        <select id="txnType">
+          <option value="expense">Spending</option>
+          <option value="income">Income</option>
+        </select>
+
+        <label for="category">Category</label>
+        <!-- Options are filled in by JS from the COLOURS map -->
+        <select id="category"></select>
+
+        <label for="note">Note (optional)</label>
+        <input type="text" id="note" placeholder="e.g. weekly shop" />
+
+        <button id="addBtn">Add transaction</button>
+      </div>
+
+      <h2 class="list-title">All transactions</h2>
+      <div id="list"></div>
+    </section>
+
+    <!-- ============================================================
+         VIEW 3: SAVINGS TRACKER (plan + reminders + bills list)
+         ============================================================ -->
+    <section class="view" id="view-savings">
+
+      <!-- Savings plan -->
+      <div class="card">
+        <h2>Savings plan</h2>
+
+        <label for="goalName">What are you saving for?</label>
+        <input type="text" id="goalName" placeholder="e.g. Holiday fund" />
+
+        <div class="row">
+          <div>
+            <label for="goalTarget">Target (£)</label>
+            <input type="number" id="goalTarget" placeholder="0.00" step="0.01" min="0" />
+          </div>
+          <div>
+            <label for="goalSaved">Saved so far (£)</label>
+            <input type="number" id="goalSaved" placeholder="0.00" step="0.01" min="0" />
+          </div>
+        </div>
+
+        <label for="goalDate">Target date</label>
+        <input type="date" id="goalDate" />
+
+        <button id="planBtn">Save plan</button>
+      </div>
+
+      <div id="planResult"></div>
+
+      <!-- Payment reminders -->
+      <div class="card">
+        <h2>Payment reminders</h2>
+
+        <label for="billName">Bill name</label>
+        <input type="text" id="billName" placeholder="e.g. Rent, Phone, Council tax" />
+
+        <div class="row">
+          <div>
+            <label for="billAmount">Amount (£)</label>
+            <input type="number" id="billAmount" placeholder="0.00" step="0.01" min="0" />
+          </div>
+          <div>
+            <label for="billDay">Due day of month</label>
+            <input type="number" id="billDay" placeholder="1-31" min="1" max="31" />
+          </div>
+        </div>
+
+        <button id="billBtn">Add reminder</button>
+      </div>
+
+      <h2 class="list-title">Your bills</h2>
+      <div id="billList"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

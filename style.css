@@ -1,0 +1,649 @@
+/* ============================================================
+   1. VARIABLES  -  our colours and settings in one place.
+   Change a value here and it updates everywhere. Try it!
+   ============================================================ */
+:root {
+  --paper:    #f3efe6;   /* warm background        */
+  --surface:  #fffdf8;   /* cards sit on top       */
+  --ink:      #21261f;   /* main text (near-black) */
+  --muted:    #6f726a;   /* quieter, grey text     */
+  --accent:   #1f6a4e;   /* deep green - our brand */
+  --line:     #e4ddcd;   /* hairline borders       */
+  --radius:   16px;      /* rounded corner size    */
+}
+
+/* A reset: removes the browser's default spacing so we control it */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Hanken Grotesk', sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+  /* keeps everything in a comfortable column, centred */
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 18px 60px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Header ---- */
+header { margin-bottom: 22px; }
+header h1 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.9rem;
+  letter-spacing: -0.01em;
+}
+header p { color: var(--muted); font-size: 0.92rem; }
+
+/* ---- Summary card (the two big totals at the top) ---- */
+.summary {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.stat {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.stat .label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.stat .value {
+  font-family: 'Fraunces', serif;
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin-top: 4px;
+  /* makes numbers line up neatly */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The "add transaction" form ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 22px;
+}
+.card h2 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 1.1rem;
+  margin-bottom: 14px;
+}
+label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+input, select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+input:focus, select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* puts amount and date side by side */
+.row { display: flex; gap: 12px; }
+.row > div { flex: 1; }
+
+button {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+button:hover  { opacity: 0.92; }
+button:active { transform: scale(0.98); }
+
+/* ---- The list of transactions ---- */
+.list-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+.txn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 9px;
+  /* small entrance animation */
+  animation: rise 0.25s ease;
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.txn .info { flex: 1; min-width: 0; }
+.txn .cat  { font-weight: 600; font-size: 0.95rem; }
+.txn .meta { font-size: 0.78rem; color: var(--muted); }
+.txn .amt  {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* the little delete (x) button on each row */
+.del {
+  width: auto;
+  background: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  padding: 2px 6px;
+  line-height: 1;
+}
+.del:hover { color: #b23a3a; opacity: 1; }
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 28px 10px;
+}
+
+/* ---- Chart cards (added in Step 2) ---- */
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.chart-card h2 {
+  font-family: 'Fraunces', serif;
+  font-weight: 500;
+  font-size: 1.1rem;
+  margin-bottom: 14px;
+}
+/* A fixed height stops the chart growing endlessly tall.
+   'position: relative' lets Chart.js size the canvas inside it. */
+.chart-box {
+  position: relative;
+  height: 240px;
+}
+
+/* ---- Category view toggle (added in Step 6) ---- */
+/* A segmented control: three buttons sharing one rounded track */
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 14px;
+}
+.view-toggle button {
+  flex: 1;
+  width: auto;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 7px;
+  border-radius: 7px;
+  margin: 0;
+}
+/* the currently-selected view button */
+.view-toggle button.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.07);
+}
+.view-toggle button:hover { opacity: 1; }
+
+/* ---- Category list view ---- */
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.cat-row:last-child { border-bottom: none; }
+.cat-row .c-info { flex: 1; min-width: 0; }
+.cat-row .c-name { font-weight: 600; font-size: 0.92rem; }
+/* a thin bar showing each category's share visually */
+.c-track {
+  background: var(--paper);
+  border-radius: 99px;
+  height: 6px;
+  margin-top: 5px;
+  overflow: hidden;
+}
+.c-fill { height: 100%; border-radius: 99px; }
+.cat-row .c-right { text-align: right; }
+.cat-row .c-pct {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.cat-row .c-amt {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Savings plan (added in Step 3) ---- */
+/* The progress bar: an outer track with an inner fill.
+   We change the fill's width with JS to show progress. */
+.progress-track {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  height: 16px;
+  overflow: hidden;            /* keeps the fill inside the rounded ends */
+  margin: 6px 0 4px;
+}
+.progress-fill {
+  background: var(--accent);
+  height: 100%;
+  width: 0%;                   /* JS sets the real width */
+  border-radius: 99px;
+  transition: width 0.4s ease; /* the bar animates as it fills */
+}
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+/* The grid of small facts: saved / remaining / per month */
+.plan-facts {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.plan-facts > div {
+  flex: 1;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.plan-facts .label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.plan-facts .num {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* The verdict box - colour changes with the message */
+.verdict {
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+.verdict.good { background: #e3f0e7; color: #1f6a4e; }
+.verdict.warn { background: #f6ead0; color: #8a5a1a; }
+.verdict.done { background: #1f6a4e; color: #fffdf8; }
+
+/* ---- Reminders (added in Step 4) ---- */
+/* The alert banner that appears at the top when bills are due */
+.alert-banner {
+  background: #f6ead0;
+  border: 1px solid #e4cf9a;
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 22px;
+}
+.alert-banner h3 {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #8a5a1a;
+  margin-bottom: 6px;
+}
+.alert-banner ul { list-style: none; }
+.alert-banner li {
+  font-size: 0.88rem;
+  color: #6a4a14;
+  padding: 2px 0;
+}
+/* A row in the list of saved bills */
+.bill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 9px;
+}
+.bill .info { flex: 1; min-width: 0; }
+.bill .name { font-weight: 600; font-size: 0.95rem; }
+.bill .when { font-size: 0.78rem; color: var(--muted); }
+.bill .amt {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The small coloured badge showing how soon a bill is due */
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.badge.soon { background: #f6ead0; color: #8a5a1a; }
+.badge.due  { background: #f0dada; color: #b23a3a; }
+.badge.ok   { background: #e3f0e7; color: #1f6a4e; }
+
+/* ---- Import feature (added in Step 5) ---- */
+/* The file picker styled as a button (real input is hidden) */
+.file-label {
+  display: block;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--accent);
+  background: var(--paper);
+  border: 1.5px dashed var(--accent);
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+}
+.file-label:hover { background: #ece7da; }
+.file-input-hidden { display: none; }
+
+/* The column-mapping dropdowns */
+.map-grid { margin-top: 14px; }
+.map-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.checkbox-row input { width: auto; margin: 2px 0 0 0; }
+
+/* The preview list - scrollable so a long statement stays tidy */
+.preview-box {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 12px 0;
+}
+.preview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+.preview-row:last-child { border-bottom: none; }
+.preview-row input[type="checkbox"] { width: auto; margin: 0; }
+.preview-row .pv-info { flex: 1; min-width: 0; }
+.preview-row .pv-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-row .pv-date { font-size: 0.74rem; color: var(--muted); }
+.preview-row .pv-amt {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* small category dropdown inside a preview row */
+.preview-row select {
+  width: auto;
+  font-size: 0.78rem;
+  padding: 4px 6px;
+  margin: 0;
+}
+/* a row the user has unticked - dimmed so it's clearly skipped */
+.preview-row.skip { opacity: 0.4; }
+
+.import-summary {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 10px 0;
+}
+/* a secondary, outline-style button (for "clear"/"cancel") */
+button.ghost {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  margin-top: 8px;
+}
+button.ghost:hover { opacity: 1; background: var(--paper); }
+
+/* ============================================================
+   NAVIGATION  -  added in Step 7 (dashboard restructure)
+   Sticky header with a hamburger button that opens a small
+   menu panel below it.
+   ============================================================ */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;                   /* stays above scrolled content */
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  /* break out of body's max-width so the bar spans full screen */
+  margin: -24px -18px 18px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.menu-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 8px;
+}
+.menu-btn:hover  { background: var(--paper); }
+.menu-btn:active { transform: scale(0.95); }
+.menu-btn span {
+  display: block;
+  height: 2px;
+  width: 20px;
+  background: var(--ink);
+  border-radius: 2px;
+}
+.header-title {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.menu-panel {
+  /* hidden by default; the .open class slides it in */
+  position: fixed;
+  top: 64px;            /* sits just below the header */
+  left: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+  padding: 6px;
+  min-width: 200px;
+  z-index: 9;
+  /* hide animation: invisible & lifted up, no clicks */
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.menu-panel.open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin: 0;
+}
+.menu-item:hover { background: var(--paper); }
+.menu-item.active {
+  background: var(--accent);
+  color: var(--surface);
+}
+
+/* ============================================================
+   VIEWS  -  only one is visible at a time.
+   ============================================================ */
+.view { display: none; }       /* hidden by default */
+.view.active { display: block; }
+
+/* A small grey helper line that sits below a card heading */
+.card-note {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: -8px 0 14px;
+}
+
+/* The "month" dropdown sits in its own labelled row */
+.month-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.month-picker label {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.month-picker select {
+  flex: 1;
+  margin: 0;
+}
+
+/* ============================================================
+   SaveCap RAG indicator
+   A big circular score with a colour that matches the rating.
+   ============================================================ */
+.savecap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 0;
+}
+.savecap-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--surface);
+  flex-shrink: 0;
+}
+.savecap-circle .pct {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.7rem;
+  line-height: 1;
+}
+.savecap-circle .lbl {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  opacity: 0.9;
+}
+.savecap-text { flex: 1; }
+.savecap-status {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+.savecap-detail {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+/* RAG colours */
+.rag-green  { background: #1f6a4e; }
+.rag-amber  { background: #c97b2a; }
+.rag-red    { background: #b23a3a; }
+.rag-grey   { background: #7a7a7a; }   /* "no data" state */
+
+/* Income transactions in the list - subtle green tint and a + sign */
+.txn.income { border-left: 3px solid #1f6a4e; }
+.txn.income .amt { color: #1f6a4e; }
+
+/* In the import preview, an income row gets the same hint */
+.preview-row.income .pv-amt { color: #1f6a4e; }
+.preview-row .pv-type {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background: same rounded square in the app's accent green -->
+  <rect width="512" height="512" rx="96" ry="96" fill="#1f6a4e"/>
+
+  <!-- 'Spend' on top, 'Track' below - two stacked words give the
+       icon the same visual weight SST had, with more meaning.
+       Georgia is a portable serif that renders the same everywhere. -->
+  <text x="256" y="200"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-weight="700"
+        font-size="120"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#fffdf8">Spend</text>
+
+  <text x="256" y="332"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-weight="700"
+        font-size="120"
+        text-anchor="middle"
+        dominant-baseline="central"
+        fill="#fffdf8">Track</text>
+
+  <!-- A short underline accent below, in keeping with the SST look -->
+  <rect x="216" y="408" width="80" height="5" rx="2.5"
+        fill="#fffdf8" opacity="0.7"/>
+</svg>
