@@ -127,8 +127,8 @@ function render() {
   // Labels carry the year, e.g. "YTD 2026: Spend"
   document.getElementById('ytdSpendLabel').textContent  = 'YTD ' + latestYear + ': Spend';
   document.getElementById('ytdIncomeLabel').textContent = 'YTD ' + latestYear + ': Income';
-  document.getElementById('ytdSpend').textContent  = formatMoney(ytdSpend);
-  document.getElementById('ytdIncome').textContent = formatMoney(ytdIncome);
+  document.getElementById('ytdSpend').textContent  = formatMoneyRounded(ytdSpend);
+  document.getElementById('ytdIncome').textContent = formatMoneyRounded(ytdIncome);
 
   // The transactions browser lives in its own function so it can
   // also be re-drawn after edits/deletes without re-running the
