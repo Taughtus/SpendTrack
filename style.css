@@ -647,3 +647,264 @@ button.ghost:hover { opacity: 1; background: var(--paper); }
   color: var(--muted);
   font-weight: 600;
 }
+
+/* ============================================================
+   Slider control (added in Step 8 for SaveCap target)
+   A range input plus a big readout of its value next to it.
+   ============================================================ */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 8px;
+}
+.slider-row input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  outline: none;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+/* The draggable "thumb" - styled separately for WebKit & Firefox */
+.slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+.slider-row input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  cursor: pointer;
+}
+.slider-value {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.4rem;
+  color: var(--accent);
+  min-width: 60px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Step-9 batch additions
+   ============================================================ */
+
+/* ----- SaveCap coloured figures ----- */
+.savecap-figures { color: var(--muted); }
+.savecap-figures .fig-income { color: #1f6a4e; font-weight: 700; }
+.savecap-figures .fig-spend  { color: #5e2d8a; font-weight: 700; }
+.savecap-figures .fig-disp   { color: #3a6ea5; font-weight: 700; }
+
+/* ----- File pill (shown after picking a statement file) ----- */
+.file-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 14px 0;
+}
+.file-pill-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.file-pill-text { min-width: 0; flex: 1; }
+.file-pill-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-pill-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+/* deep orange Import button */
+button.btn-orange {
+  background: #c7521e;
+  color: var(--surface);
+  font-weight: 700;
+}
+button.btn-orange:hover { opacity: 0.92; }
+
+/* ----- Collapsible Add a single transaction ----- */
+.collapse-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Fraunces', serif;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.collapse-toggle:hover { opacity: 1; }
+.collapse-toggle .chevron {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-size: 1.3rem;
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1;
+}
+.collapse-panel { margin-top: 14px; }
+
+/* ----- Transactions browser: year -> months -> rows ----- */
+.year-block {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.year-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+}
+.year-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+.year-total {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.month-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  padding: 4px 0 6px;
+}
+.month-link {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.month-link:hover { opacity: 0.85; }
+.month-link.active {
+  color: var(--ink);
+  text-decoration: none;
+}
+.month-link .count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.82rem;
+}
+.month-detail {
+  margin-top: 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+.month-detail-head {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+/* Individual transaction row inside an open month */
+.txn-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 7px;
+}
+.txn-row .info { flex: 1; min-width: 0; }
+.txn-row .cat  { font-weight: 600; font-size: 0.92rem; }
+.txn-row .meta { font-size: 0.78rem; color: var(--muted); }
+.txn-row .amt  {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.txn-row.income { border-left: 3px solid #1f6a4e; }
+.txn-row.income .amt { color: #1f6a4e; }
+
+.row-edit, .row-del {
+  width: auto;
+  background: none;
+  border: none;
+  padding: 2px 7px;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--muted);
+}
+.row-edit:hover { color: var(--accent); }
+.row-del:hover  { color: #b23a3a; }
+
+/* Inline edit form for a single transaction row */
+.txn-row.editing {
+  display: block;
+  background: var(--paper);
+}
+.edit-form { display: block; }
+.edit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.edit-row label {
+  width: 80px;
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.edit-row input, .edit-row select {
+  flex: 1;
+  margin: 0;
+  font-size: 0.9rem;
+  padding: 8px 10px;
+}
+.edit-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.edit-buttons button { flex: 1; }

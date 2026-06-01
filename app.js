@@ -85,6 +85,11 @@ function migrateOldCategories() {
 function formatMoney(n) {
   return '£' + n.toFixed(2);
 }
+/* Rounded version (no pence) - used in the dashboard's SaveCap
+   figures, where headline numbers read more cleanly without pence. */
+function formatMoneyRounded(n) {
+  return '£' + Math.round(n).toLocaleString('en-GB');
+}
 // Turns "2026-05-24" into "24 May 2026"
 function formatDate(iso) {
   const d = new Date(iso);
@@ -99,70 +104,44 @@ function formatDate(iso) {
    changes, so the screen always matches the data.
    -------------------------------------------------------------- */
 function render() {
-  const list = document.getElementById('list');
+  // Find the latest year that has data. We pick the highest year
+  // across all transactions; if there are none, fall back to today.
+  let latestYear = new Date().getFullYear();
+  transactions.forEach(function (t) {
+    const y = parseInt(t.date.slice(0, 4), 10);
+    if (y > latestYear) latestYear = y;
+  });
 
   // Walk all transactions, splitting spending from income.
-  // 'thisMonth' totals only count rows in the current calendar month.
-  let monthSpend = 0;
-  let monthIncome = 0;
-  const now = new Date();
+  // YTD totals = everything in the latest year so far.
+  let ytdSpend = 0;
+  let ytdIncome = 0;
 
   transactions.forEach(function (t) {
-    const d = new Date(t.date);
-    const sameMonth = d.getMonth() === now.getMonth()
-                   && d.getFullYear() === now.getFullYear();
-    if (t.type === 'income') {
-      if (sameMonth) monthIncome += t.amount;
-    } else {
-      if (sameMonth) monthSpend += t.amount;
-    }
+    const y = parseInt(t.date.slice(0, 4), 10);
+    if (y !== latestYear) return;
+    if (t.type === 'income') ytdIncome += t.amount;
+    else                     ytdSpend  += t.amount;
   });
 
-  document.getElementById('monthTotal').textContent = formatMoney(monthSpend);
-  document.getElementById('monthIncomeTotal').textContent = formatMoney(monthIncome);
+  // Labels carry the year, e.g. "YTD 2026: Spend"
+  document.getElementById('ytdSpendLabel').textContent  = 'YTD ' + latestYear + ': Spend';
+  document.getElementById('ytdIncomeLabel').textContent = 'YTD ' + latestYear + ': Income';
+  document.getElementById('ytdSpend').textContent  = formatMoney(ytdSpend);
+  document.getElementById('ytdIncome').textContent = formatMoney(ytdIncome);
 
-  // Empty state - show a friendly message and clear charts
-  if (transactions.length === 0) {
-    list.innerHTML = '<div class="empty">No transactions yet. Upload a statement or add one above.</div>';
-    drawCharts();
-    return;
-  }
-
-  // Newest first
-  const sorted = transactions.slice().sort(function (a, b) {
-    return new Date(b.date) - new Date(a.date);
-  });
-
-  // Build the list. Income rows get a tinted left edge & "+" prefix.
-  list.innerHTML = sorted.map(function (t) {
-    const colour = COLOURS[t.category] || '#7a7a7a';
-    const note = t.note ? ' · ' + t.note : '';
-    const isIncome = t.type === 'income';
-    const amountText = (isIncome ? '+' : '') + formatMoney(t.amount);
-    return (
-      '<div class="txn' + (isIncome ? ' income' : '') + '">' +
-        '<span class="dot" style="background:' + colour + '"></span>' +
-        '<div class="info">' +
-          '<div class="cat">' + t.category + '</div>' +
-          '<div class="meta">' + formatDate(t.date) + note + '</div>' +
-        '</div>' +
-        '<div class="amt">' + amountText + '</div>' +
-        '<button class="del" data-id="' + t.id + '">&times;</button>' +
-      '</div>'
-    );
-  }).join('');
-
-  // Wire up delete buttons - scoped to this list so bill buttons
-  // (which also use .del) aren't accidentally caught.
-  list.querySelectorAll('.del').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      deleteTransaction(btn.dataset.id);
-    });
-  });
+  // The transactions browser lives in its own function so it can
+  // also be re-drawn after edits/deletes without re-running the
+  // whole render. It handles the empty-state itself.
+  renderTxnBrowser();
 
   drawCharts();
   if (typeof renderPlan === 'function') renderPlan();
 }
+
+/* The flat 'list' element is gone (replaced by the year/month
+   browser), so render() no longer touches it. The 'list' variable
+   above remains as a defensive lookup but is unused if missing. */
 
 /* --------------------------------------------------------------
    STEP 5 - Adding a transaction
@@ -200,6 +179,9 @@ function addTransaction() {
   // Clear the form for the next entry
   amountInput.value = '';
   document.getElementById('note').value = '';
+
+  // Collapse the Add panel back down after a successful add
+  if (typeof setAddPanelOpen === 'function') setAddPanelOpen(false);
 }
 
 /* --------------------------------------------------------------
@@ -212,6 +194,261 @@ function deleteTransaction(id) {
   });
   save();
   render();
+}
+
+/* --------------------------------------------------------------
+   STEP 6b - Editing a transaction
+   Saves new values for the transaction with this id.
+   -------------------------------------------------------------- */
+function updateTransaction(id, changes) {
+  transactions.forEach(function (t) {
+    if (t.id === id) {
+      if (changes.date !== undefined)     t.date = changes.date;
+      if (changes.amount !== undefined)   t.amount = changes.amount;
+      if (changes.category !== undefined) t.category = changes.category;
+      if (changes.note !== undefined)     t.note = changes.note;
+      if (changes.type !== undefined)     t.type = changes.type;
+    }
+  });
+  save();
+  render();
+}
+
+/* --------------------------------------------------------------
+   STEP 6c - Transactions browser (year -> months -> rows)
+   The Upload statement page lists transactions grouped by year,
+   with month names as clickable chips. Clicking a month expands
+   its row list (each row has delete and edit buttons).
+   We remember which month is open in a module-level variable so
+   re-renders (after edit/delete) keep your place.
+   -------------------------------------------------------------- */
+let openMonth = null;        // "YYYY-MM" or null
+
+function renderTxnBrowser() {
+  const box = document.getElementById('txnBrowser');
+  if (!box) return;
+
+  if (transactions.length === 0) {
+    box.innerHTML = '<div class="empty">No transactions yet. ' +
+      'Upload a statement or add one above.</div>';
+    return;
+  }
+
+  // Group transactions by year, and within year by month key.
+  // years[year] = { 'YYYY-MM': [txn, txn, ...], ... }
+  const years = {};
+  transactions.forEach(function (t) {
+    const year     = t.date.slice(0, 4);
+    const monthKey = t.date.slice(0, 7);
+    if (!years[year]) years[year] = {};
+    if (!years[year][monthKey]) years[year][monthKey] = [];
+    years[year][monthKey].push(t);
+  });
+
+  // Newest year first
+  const yearList = Object.keys(years).sort().reverse();
+
+  let html = '';
+  yearList.forEach(function (year) {
+    // Sum the year so the heading shows a meaningful total
+    let yearTotal = 0;
+    Object.keys(years[year]).forEach(function (mk) {
+      years[year][mk].forEach(function (t) {
+        if (t.type !== 'income') yearTotal += t.amount;
+      });
+    });
+
+    html += '<div class="year-block">' +
+              '<div class="year-head">' +
+                '<span class="year-name">' + year + '</span>' +
+                '<span class="year-total">spent ' +
+                  formatMoneyRounded(yearTotal) + '</span>' +
+              '</div>' +
+              '<div class="month-list">';
+
+    // Months within the year, newest first
+    const monthKeys = Object.keys(years[year]).sort().reverse();
+    monthKeys.forEach(function (mk) {
+      const monthDate = new Date(mk + '-01');
+      const monthName = monthDate.toLocaleDateString('en-GB',
+        { month: 'long' });
+      const count = years[year][mk].length;
+      const isOpen = (mk === openMonth);
+      html += '<a href="#" class="month-link' + (isOpen ? ' active' : '') +
+              '" data-month="' + mk + '">' +
+                monthName + ' <span class="count">(' + count + ')</span>' +
+              '</a>';
+    });
+
+    html += '</div>';
+
+    // If a month belongs to this year and is open, render its rows here
+    if (openMonth && openMonth.slice(0, 4) === year) {
+      const openMonthName = new Date(openMonth + '-01')
+        .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      html += '<div class="month-detail">' +
+                '<div class="month-detail-head">' + openMonthName + '</div>' +
+                renderMonthRows(years[year][openMonth] || []) +
+              '</div>';
+    }
+
+    html += '</div>';
+  });
+
+  box.innerHTML = html;
+
+  // Wire up month links
+  box.querySelectorAll('.month-link').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      const mk = a.dataset.month;
+      openMonth = (openMonth === mk) ? null : mk;   // toggle
+      renderTxnBrowser();
+    });
+  });
+
+  // Wire up row buttons (delete / edit / save / cancel)
+  wireRowButtons(box);
+}
+
+/* Build the HTML for the rows inside an open month. Each row is
+   either in normal view (with delete + edit buttons) or edit view
+   (inline form with save + cancel). 'editingId' is module-level. */
+let editingId = null;
+
+function renderMonthRows(rows) {
+  // newest date first within the month
+  const sorted = rows.slice().sort(function (a, b) {
+    return new Date(b.date) - new Date(a.date);
+  });
+
+  return sorted.map(function (t) {
+    if (t.id === editingId) return renderEditRow(t);
+    return renderViewRow(t);
+  }).join('');
+}
+
+function renderViewRow(t) {
+  const colour = COLOURS[t.category] || '#7a7a7a';
+  const note = t.note ? ' · ' + t.note : '';
+  const isIncome = t.type === 'income';
+  const amountText = (isIncome ? '+' : '') + formatMoney(t.amount);
+
+  return (
+    '<div class="txn-row' + (isIncome ? ' income' : '') + '">' +
+      '<span class="dot" style="background:' + colour + '"></span>' +
+      '<div class="info">' +
+        '<div class="cat">' + t.category + '</div>' +
+        '<div class="meta">' + formatDate(t.date) + note + '</div>' +
+      '</div>' +
+      '<div class="amt">' + amountText + '</div>' +
+      '<button class="row-edit" data-id="' + t.id + '" title="Edit">' +
+        '&#9998;' +     // pencil icon
+      '</button>' +
+      '<button class="row-del" data-id="' + t.id + '" title="Delete">' +
+        '&times;' +
+      '</button>' +
+    '</div>'
+  );
+}
+
+function renderEditRow(t) {
+  // Build the category options inline
+  let catOptions = '';
+  CATEGORIES.forEach(function (c) {
+    const sel = (c === t.category) ? ' selected' : '';
+    catOptions += '<option value="' + c + '"' + sel + '>' + c + '</option>';
+  });
+  const expSel = (t.type !== 'income') ? ' selected' : '';
+  const incSel = (t.type === 'income') ? ' selected' : '';
+
+  return (
+    '<div class="txn-row editing" data-id="' + t.id + '">' +
+      '<div class="edit-form">' +
+        '<div class="edit-row">' +
+          '<label>Date</label>' +
+          '<input class="edit-date" type="date" value="' + t.date + '" />' +
+        '</div>' +
+        '<div class="edit-row">' +
+          '<label>Amount (£)</label>' +
+          '<input class="edit-amount" type="number" step="0.01" min="0" ' +
+                 'value="' + t.amount + '" />' +
+        '</div>' +
+        '<div class="edit-row">' +
+          '<label>Type</label>' +
+          '<select class="edit-type">' +
+            '<option value="expense"' + expSel + '>Spending</option>' +
+            '<option value="income"'  + incSel + '>Income</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="edit-row">' +
+          '<label>Category</label>' +
+          '<select class="edit-cat">' + catOptions + '</select>' +
+        '</div>' +
+        '<div class="edit-row">' +
+          '<label>Note</label>' +
+          '<input class="edit-note" type="text" value="' +
+                 (t.note || '').replace(/"/g, '&quot;') + '" />' +
+        '</div>' +
+        '<div class="edit-buttons">' +
+          '<button class="row-save"   data-id="' + t.id + '">Save</button>' +
+          '<button class="row-cancel ghost" data-id="' + t.id + '">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function wireRowButtons(box) {
+  // Edit -> remember which id is being edited, re-render that month
+  box.querySelectorAll('.row-edit').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      editingId = btn.dataset.id;
+      renderTxnBrowser();
+    });
+  });
+
+  // Delete (with confirm)
+  box.querySelectorAll('.row-del').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (confirm('Delete this transaction?')) {
+        deleteTransaction(btn.dataset.id);
+      }
+    });
+  });
+
+  // Cancel - back to view, no save
+  box.querySelectorAll('.row-cancel').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      editingId = null;
+      renderTxnBrowser();
+    });
+  });
+
+  // Save - read the form into the transaction
+  box.querySelectorAll('.row-save').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const id = btn.dataset.id;
+      const row = btn.closest('.txn-row');
+      const newAmount = parseFloat(row.querySelector('.edit-amount').value);
+      if (isNaN(newAmount) || newAmount <= 0) {
+        alert('Please enter an amount greater than zero.');
+        return;
+      }
+      const newDate = row.querySelector('.edit-date').value;
+      if (!newDate) { alert('Please pick a date.'); return; }
+
+      updateTransaction(id, {
+        date:     newDate,
+        amount:   newAmount,
+        type:     row.querySelector('.edit-type').value,
+        category: row.querySelector('.edit-cat').value,
+        note:     row.querySelector('.edit-note').value.trim()
+      });
+      editingId = null;
+      // updateTransaction already triggered render() which re-draws
+    });
+  });
 }
 
 /* --------------------------------------------------------------
@@ -573,18 +810,30 @@ function renderTop5Chart() {
   });
 }
 
-/* WIDGET 3 - SaveCap rating
-   The "rate of disposable income": share of income that's left
-   after spending. We use ALL income & spending across the data.
-   A high savings rate is green; squeezed is amber; underwater is red.
+/* SaveCap thresholds work from a single user-set TARGET (0-40%).
+   The slider in Settings controls it. Logic:
+     Green: actual >= target          (you've hit it)
+     Amber: actual >= target / 2      (at least halfway)
+     Red:   below that                (or overspending)
+   Special case: target = 0 means "no savings goal" - anything
+   non-negative is Green by definition. */
+const SAVECAP_KEY = 'spending-tracker-savecap-target';
+let saveCapTarget = 20;
 
-   Thresholds (in %) - feel free to adjust:
-     >= 20 .... Green  ("Strong")
-     5 to 20 .. Amber  ("Moderate")
-     < 5 ...... Red    ("Tight")
-*/
-const SAVECAP_GREEN = 20;
-const SAVECAP_AMBER = 5;
+function loadSaveCapTarget() {
+  const saved = localStorage.getItem(SAVECAP_KEY);
+  if (saved !== null) saveCapTarget = parseInt(saved, 10);
+  // Clamp to the new slider range (1-25), in case an older value
+  // outside that band is still in storage.
+  if (saveCapTarget < 1)  saveCapTarget = 1;
+  if (saveCapTarget > 25) saveCapTarget = 25;
+}
+function setSaveCapTarget(value) {
+  saveCapTarget = parseInt(value, 10);
+  localStorage.setItem(SAVECAP_KEY, String(saveCapTarget));
+  document.getElementById('saveCapValue').textContent = saveCapTarget;
+  renderSaveCap();   // immediately reflect the change
+}
 
 function renderSaveCap() {
   const box = document.getElementById('saveCapBox');
@@ -617,24 +866,28 @@ function renderSaveCap() {
   const disposable = income - spend;
   const pct = (disposable / income) * 100;
 
-  // Choose RAG colour and label based on the thresholds
+  // Thresholds derived from the user's chosen target.
+  // target 0 is special: any non-negative rate counts as green.
+  const greenAt = saveCapTarget;
+  const amberAt = saveCapTarget / 2;
+
   let ragClass, status, detail;
-  if (pct >= SAVECAP_GREEN) {
-    ragClass = 'rag-green';
-    status   = 'Strong';
-    detail   = 'You keep at least £' + SAVECAP_GREEN + ' of every £100 you earn. Healthy.';
-  } else if (pct >= SAVECAP_AMBER) {
-    ragClass = 'rag-amber';
-    status   = 'Moderate';
-    detail   = 'There is some headroom, but room to push your savings rate higher.';
-  } else if (pct >= 0) {
-    ragClass = 'rag-red';
-    status   = 'Tight';
-    detail   = 'Spending is close to income. Little is being set aside.';
-  } else {
+  if (pct < 0) {
     ragClass = 'rag-red';
     status   = 'Overspending';
     detail   = 'Spending exceeds income across the period shown.';
+  } else if (pct >= greenAt) {
+    ragClass = 'rag-green';
+    status   = 'Strong';
+    detail   = 'You are saving at least your target of ' + saveCapTarget + '%.';
+  } else if (pct >= amberAt) {
+    ragClass = 'rag-amber';
+    status   = 'Moderate';
+    detail   = 'At least halfway to your ' + saveCapTarget + '% target. Keep pushing.';
+  } else {
+    ragClass = 'rag-red';
+    status   = 'Tight';
+    detail   = 'Below halfway to your ' + saveCapTarget + '% target.';
   }
 
   box.innerHTML =
@@ -646,9 +899,10 @@ function renderSaveCap() {
       '<div class="savecap-text">' +
         '<div class="savecap-status">' + status + '</div>' +
         '<div class="savecap-detail">' + detail + '</div>' +
-        '<div class="savecap-detail" style="margin-top:6px">' +
-          'Income ' + formatMoney(income) + ' · Spend ' + formatMoney(spend) +
-          ' · Disposable ' + formatMoney(disposable) +
+        '<div class="savecap-detail savecap-figures" style="margin-top:6px">' +
+          'Income <span class="fig-income">' + formatMoneyRounded(income) + '</span>' +
+          ' · Spend <span class="fig-spend">' + formatMoneyRounded(spend) + '</span>' +
+          ' · Disposable <span class="fig-disp">' + formatMoneyRounded(disposable) + '</span>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1128,7 +1382,9 @@ function parseAmount(value) {
   return isNaN(n) ? 0 : n;
 }
 
-/* STAGE 1 - the file has been picked: read and parse it */
+/* STAGE 1 - the file has been picked: read it, then show a file
+   pill (icon + name) and a deep-orange "Import" button. Nothing
+   happens until the user clicks Import. */
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1136,12 +1392,8 @@ function handleFile(event) {
   const reader = new FileReader();
   reader.onload = function (e) {
     try {
-      // SheetJS reads the file's raw bytes and gives us a workbook
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-
-      // take the first sheet, convert to an array of rows.
-      // header:1 means "give me plain arrays, row 0 is the header"
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       importRows = XLSX.utils.sheet_to_json(sheet,
         { header: 1, raw: false, blankrows: false });
@@ -1150,7 +1402,7 @@ function handleFile(event) {
         alert('That file has no data rows.');
         return;
       }
-      showMapping();
+      showFilePill(file.name, importRows.length - 1);
     } catch (err) {
       alert('Sorry, that file could not be read. Is it a valid '
           + 'CSV or Excel file?');
@@ -1158,6 +1410,40 @@ function handleFile(event) {
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+/* Show the file pill (icon + name + row count) and a deep-orange
+   Import button. Clicking Import advances to the column-mapping
+   stage (the existing flow continues from there). */
+function showFilePill(filename, rowCount) {
+  const area = document.getElementById('importArea');
+  // A small inline SVG document icon - travels with the page,
+  // no extra file needed
+  const fileIcon =
+    '<svg class="file-pill-icon" viewBox="0 0 24 24" fill="none" ' +
+         'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+         'stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+      '<polyline points="14 2 14 8 20 8"/>' +
+      '<line x1="8"  y1="13" x2="16" y2="13"/>' +
+      '<line x1="8"  y1="17" x2="16" y2="17"/>' +
+    '</svg>';
+
+  area.innerHTML =
+    '<div class="file-pill">' +
+      fileIcon +
+      '<div class="file-pill-text">' +
+        '<div class="file-pill-name">' + filename + '</div>' +
+        '<div class="file-pill-meta">' + rowCount + ' rows ready</div>' +
+      '</div>' +
+    '</div>' +
+    '<button id="kickoffImportBtn" class="btn-orange">Import</button>' +
+    '<button id="cancelFileBtn" class="ghost">Choose a different file</button>';
+
+  document.getElementById('kickoffImportBtn')
+    .addEventListener('click', showMapping);
+  document.getElementById('cancelFileBtn')
+    .addEventListener('click', cancelImport);
 }
 
 /* Look through the header names for one that matches any keyword.
@@ -1476,8 +1762,8 @@ const VIEW_KEY = 'spending-tracker-view';
 let currentView = 'home';
 
 const VIEW_TITLES = {
-  'home':    'Dashboard',
-  'upload':  'Statement upload',
+  'home':    'Homepage: Dashboard',
+  'upload':  'Upload statements here',
   'savings': 'Savings tracker'
 };
 
@@ -1533,6 +1819,20 @@ document.addEventListener('click', function (e) {
 
 document.getElementById('addBtn')
   .addEventListener('click', addTransaction);
+
+/* Collapse toggle for the Add a single transaction card */
+function setAddPanelOpen(open) {
+  const panel  = document.getElementById('addPanel');
+  const toggle = document.getElementById('addToggle');
+  panel.hidden = !open;
+  toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  toggle.querySelector('.chevron').textContent = open ? '\u2212' : '+';  // minus or plus
+}
+document.getElementById('addToggle')
+  .addEventListener('click', function () {
+    const panel = document.getElementById('addPanel');
+    setAddPanelOpen(panel.hidden);   // hidden -> open it; visible -> close
+  });
 document.getElementById('planBtn')
   .addEventListener('click', savePlanFromForm);
 document.getElementById('billBtn')
@@ -1557,6 +1857,65 @@ document.getElementById('monthSelect')
 // default the manual-entry date box to today
 document.getElementById('date').valueAsDate = new Date();
 
+/* --- Period (month + year) selectors (added in Step 8) ---
+   Pick a month and year before entering manual transactions.
+   When either changes, we update the date input to the same day
+   number in that period (or last day if the day doesn't exist,
+   e.g. Feb 31 -> Feb 28). */
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April',
+                     'May', 'June', 'July', 'August',
+                     'September', 'October', 'November', 'December'];
+
+function populatePeriodSelectors() {
+  const monthSel = document.getElementById('periodMonth');
+  const yearSel  = document.getElementById('periodYear');
+  const now = new Date();
+
+  // months 0-11
+  monthSel.innerHTML = MONTH_NAMES.map(function (name, i) {
+    const sel = (i === now.getMonth()) ? ' selected' : '';
+    return '<option value="' + i + '"' + sel + '>' + name + '</option>';
+  }).join('');
+
+  // years: current year back 5, forward 1
+  let yearHtml = '';
+  const thisYear = now.getFullYear();
+  for (let y = thisYear - 5; y <= thisYear + 1; y++) {
+    const sel = (y === thisYear) ? ' selected' : '';
+    yearHtml += '<option value="' + y + '"' + sel + '>' + y + '</option>';
+  }
+  yearSel.innerHTML = yearHtml;
+}
+populatePeriodSelectors();
+
+function syncDateFromPeriod() {
+  const month = parseInt(document.getElementById('periodMonth').value, 10);
+  const year  = parseInt(document.getElementById('periodYear').value, 10);
+  const dateInput = document.getElementById('date');
+
+  // Preserve the current day if possible; fall back to the last day
+  // of the chosen month if that day doesn't exist there.
+  const currentDay = dateInput.valueAsDate
+    ? dateInput.valueAsDate.getDate()
+    : new Date().getDate();
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const day = Math.min(currentDay, lastDay);
+  dateInput.value = year + '-'
+                  + String(month + 1).padStart(2, '0') + '-'
+                  + String(day).padStart(2, '0');
+}
+document.getElementById('periodMonth')
+  .addEventListener('change', syncDateFromPeriod);
+document.getElementById('periodYear')
+  .addEventListener('change', syncDateFromPeriod);
+
+/* --- SaveCap target slider --- */
+document.getElementById('saveCapTarget')
+  .addEventListener('input', function (e) {
+    setSaveCapTarget(e.target.value);
+  });
+
 /* Fill the manual-entry category dropdown from CATEGORIES, so there's
    only ONE place to add a category (the COLOURS map). */
 function populateCategoryDropdown() {
@@ -1573,8 +1932,13 @@ loadPlan();
 loadBills();
 loadCatView();
 loadSelectedMonth();
+loadSaveCapTarget();
 fillPlanForm();
 updateToggleButtons();
+
+// reflect the loaded SaveCap target in the slider and its readout
+document.getElementById('saveCapTarget').value = saveCapTarget;
+document.getElementById('saveCapValue').textContent = saveCapTarget;
 
 // Remember which view the user was last on
 const savedView = localStorage.getItem(VIEW_KEY) || 'home';
@@ -1583,3 +1947,18 @@ showView(savedView);
 render();
 renderPlan();
 renderBills();
+
+/* --------------------------------------------------------------
+   STEP 9 - Register the service worker so the app is installable
+   and works offline. We register AFTER the page is up and running
+   so nothing important is delayed by it. The 'in navigator' check
+   means older browsers without service workers simply skip this.
+   -------------------------------------------------------------- */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function (err) {
+      // Failure here is fine - the app still works, just not offline.
+      console.log('Service worker registration skipped:', err.message);
+    });
+  });
+}

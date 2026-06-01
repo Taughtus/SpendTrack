@@ -56,7 +56,7 @@
   <!-- ===== Menu panel: hidden until the button is clicked ===== -->
   <nav id="menuPanel" class="menu-panel" aria-hidden="true">
     <button class="menu-item" data-view="home">Home</button>
-    <button class="menu-item" data-view="upload">Statement upload</button>
+    <button class="menu-item" data-view="upload">Upload statement</button>
     <button class="menu-item" data-view="savings">Savings tracker</button>
   </nav>
 
@@ -70,15 +70,17 @@
          ============================================================ -->
     <section class="view" id="view-home">
 
-      <!-- Two big totals at the top of the dashboard -->
+      <!-- Two big totals at the top of the dashboard.
+           Show year-to-date (YTD) figures for the latest year that
+           has any data. The year suffix in each label is set by JS. -->
       <div class="summary">
         <div class="stat">
-          <div class="label">This month spend</div>
-          <div class="value" id="monthTotal">£0.00</div>
+          <div class="label"><span id="ytdSpendLabel">YTD: Spend</span></div>
+          <div class="value" id="ytdSpend">£0.00</div>
         </div>
         <div class="stat">
-          <div class="label">This month income</div>
-          <div class="value" id="monthIncomeTotal">£0.00</div>
+          <div class="label"><span id="ytdIncomeLabel">YTD: Income</span></div>
+          <div class="value" id="ytdIncome">£0.00</div>
         </div>
       </div>
 
@@ -92,7 +94,7 @@
 
       <!-- Dashboard widget 2: Top 5 categories by average monthly spend -->
       <div class="chart-card">
-        <h2>Top 5 categories (avg per month)</h2>
+        <h2>Top 5 categories Spend (avg per month)</h2>
         <div class="chart-box">
           <canvas id="top5Chart"></canvas>
         </div>
@@ -144,7 +146,7 @@
         </p>
         <div class="slider-row">
           <input type="range" id="saveCapTarget"
-                 min="0" max="40" step="5" value="20" />
+                 min="1" max="25" step="1" value="20" />
           <div class="slider-value">
             <span id="saveCapValue">20</span>%
           </div>
@@ -163,55 +165,63 @@
         <div id="importArea"></div>
       </div>
 
-      <!-- Manual transaction entry -->
+      <!-- Manual transaction entry: collapsed by default.
+           Click the toggle to expand the form. -->
       <div class="card">
-        <h2>Add a transaction</h2>
+        <button id="addToggle" class="collapse-toggle" aria-expanded="false">
+          <span>Add a single transaction</span>
+          <span class="chevron">+</span>
+        </button>
 
-        <!-- Period selector (Step 8): pick a month + year first,
-             then the day below auto-fills to that period. Useful
-             when entering many past transactions in one go. -->
-        <p class="card-note">Pick the period you're entering for.
-          The date below auto-fills to match.</p>
-        <div class="row">
-          <div>
-            <label for="periodMonth">Month</label>
-            <select id="periodMonth"></select>
+        <div id="addPanel" class="collapse-panel" hidden>
+          <!-- Period selector: pick a month + year first, the day
+               below auto-fills to that period. Useful when entering
+               many past transactions in one go. -->
+          <p class="card-note">Pick the period you're entering for.
+            The date below auto-fills to match.</p>
+          <div class="row">
+            <div>
+              <label for="periodMonth">Month</label>
+              <select id="periodMonth"></select>
+            </div>
+            <div>
+              <label for="periodYear">Year</label>
+              <select id="periodYear"></select>
+            </div>
           </div>
-          <div>
-            <label for="periodYear">Year</label>
-            <select id="periodYear"></select>
+
+          <div class="row">
+            <div>
+              <label for="amount">Amount (£)</label>
+              <input type="number" id="amount" placeholder="0.00" step="0.01" min="0" />
+            </div>
+            <div>
+              <label for="date">Date</label>
+              <input type="date" id="date" />
+            </div>
           </div>
+
+          <label for="txnType">Type</label>
+          <select id="txnType">
+            <option value="expense">Spending</option>
+            <option value="income">Income</option>
+          </select>
+
+          <label for="category">Category</label>
+          <!-- Options are filled in by JS from the COLOURS map -->
+          <select id="category"></select>
+
+          <label for="note">Note (optional)</label>
+          <input type="text" id="note" placeholder="e.g. weekly shop" />
+
+          <button id="addBtn">Add transaction</button>
         </div>
-
-        <div class="row">
-          <div>
-            <label for="amount">Amount (£)</label>
-            <input type="number" id="amount" placeholder="0.00" step="0.01" min="0" />
-          </div>
-          <div>
-            <label for="date">Date</label>
-            <input type="date" id="date" />
-          </div>
-        </div>
-
-        <label for="txnType">Type</label>
-        <select id="txnType">
-          <option value="expense">Spending</option>
-          <option value="income">Income</option>
-        </select>
-
-        <label for="category">Category</label>
-        <!-- Options are filled in by JS from the COLOURS map -->
-        <select id="category"></select>
-
-        <label for="note">Note (optional)</label>
-        <input type="text" id="note" placeholder="e.g. weekly shop" />
-
-        <button id="addBtn">Add transaction</button>
       </div>
 
+      <!-- Transactions browser: grouped by year, then by month.
+           Click a month to expand its rows (with delete/edit). -->
       <h2 class="list-title">All transactions</h2>
-      <div id="list"></div>
+      <div id="txnBrowser"></div>
     </section>
 
     <!-- ============================================================
