@@ -726,6 +726,7 @@ function renderCategoryView() {
    ------------------------------------------------------------------ */
 let incomeChart = null;
 let top5Chart = null;
+let saveCapHistoryChart = null;
 
 /* WIDGET 1 - Income by month: a green bar chart, similar shape to
    the old spending-by-month chart but on income transactions. */
@@ -832,22 +833,38 @@ function setSaveCapTarget(value) {
   saveCapTarget = parseInt(value, 10);
   localStorage.setItem(SAVECAP_KEY, String(saveCapTarget));
   document.getElementById('saveCapValue').textContent = saveCapTarget;
-  renderSaveCap();   // immediately reflect the change
+  renderSaveCap();
+  renderSaveCapHistoryChart();   // history chart also depends on target
+}
+
+/* The one rule for RAG classification, used by BOTH the headline
+   rating AND the monthly history chart. Returns 'green', 'amber',
+   'red', or 'grey' (no data).
+     Green: pct >= target           (you hit it)
+     Amber: pct >= target / 2       (at least halfway)
+     Red:   below that or negative  (overspending)
+   'income' is passed so we can flag months with no income as grey
+   instead of misleadingly red. */
+function classifySaveCap(pct, income) {
+  if (income === 0) return 'grey';
+  if (pct < 0) return 'red';
+  if (pct >= saveCapTarget) return 'green';
+  if (pct >= saveCapTarget / 2) return 'amber';
+  return 'red';
 }
 
 function renderSaveCap() {
   const box = document.getElementById('saveCapBox');
   if (!box) return;
 
-  // sum income and spending across the whole history
-  let income = 0, spend = 0;
-  transactions.forEach(function (t) {
-    if (isIncome(t))  income += t.amount;
-    if (isExpense(t)) spend  += t.amount;
-  });
+  // Compute a per-month series: month -> { income, spend }.
+  // Then we can pick the latest month and also pass the series
+  // to the history chart.
+  const monthly = saveCapByMonth();
+  const monthKeys = Object.keys(monthly).sort();   // oldest -> newest
 
-  // No income recorded yet -> show a friendly no-data state
-  if (income === 0) {
+  // No data at all -> grey "no data" state
+  if (monthKeys.length === 0) {
     box.innerHTML =
       '<div class="savecap">' +
         '<div class="savecap-circle rag-grey">' +
@@ -855,46 +872,66 @@ function renderSaveCap() {
           '<div class="lbl">no data</div>' +
         '</div>' +
         '<div class="savecap-text">' +
-          '<div class="savecap-status">No income recorded yet</div>' +
-          '<div class="savecap-detail">Import a statement to capture ' +
-            'income transactions, then this will fill in.</div>' +
+          '<div class="savecap-status">No transactions yet</div>' +
+          '<div class="savecap-detail">Upload a statement to start ' +
+            'tracking your monthly SaveCap.</div>' +
         '</div>' +
       '</div>';
     return;
   }
 
+  // Pick the latest month with data and use ITS income/spend
+  const latestKey = monthKeys[monthKeys.length - 1];
+  const m = monthly[latestKey];
+  const income = m.income;
+  const spend  = m.spend;
   const disposable = income - spend;
-  const pct = (disposable / income) * 100;
+  const pct = income > 0 ? (disposable / income) * 100 : 0;
+  const monthName = new Date(latestKey + '-01').toLocaleDateString('en-GB',
+    { month: 'long', year: 'numeric' });
 
-  // Thresholds derived from the user's chosen target.
-  // target 0 is special: any non-negative rate counts as green.
-  const greenAt = saveCapTarget;
-  const amberAt = saveCapTarget / 2;
+  // Latest month has no income recorded -> grey
+  if (income === 0) {
+    box.innerHTML =
+      '<div class="savecap">' +
+        '<div class="savecap-circle rag-grey">' +
+          '<div class="pct">—</div>' +
+          '<div class="lbl">no income</div>' +
+        '</div>' +
+        '<div class="savecap-text">' +
+          '<div class="savecap-status">No income in ' + monthName + '</div>' +
+          '<div class="savecap-detail">Make sure your statement\'s ' +
+            '"In" column was mapped on import.</div>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
 
-  let ragClass, status, detail;
-  if (pct < 0) {
-    ragClass = 'rag-red';
-    status   = 'Overspending';
-    detail   = 'Spending exceeds income across the period shown.';
-  } else if (pct >= greenAt) {
-    ragClass = 'rag-green';
-    status   = 'Strong';
-    detail   = 'You are saving at least your target of ' + saveCapTarget + '%.';
-  } else if (pct >= amberAt) {
-    ragClass = 'rag-amber';
-    status   = 'Moderate';
-    detail   = 'At least halfway to your ' + saveCapTarget + '% target. Keep pushing.';
+  // Classify with the shared rule
+  const rag = classifySaveCap(pct, income);
+  let status, detail;
+  if (rag === 'green') {
+    status = 'Strong';
+    detail = 'In ' + monthName + ', you saved at least your target of ' +
+             saveCapTarget + '%.';
+  } else if (rag === 'amber') {
+    status = 'Moderate';
+    detail = 'In ' + monthName + ', you got at least halfway to your ' +
+             saveCapTarget + '% target.';
+  } else if (pct < 0) {
+    status = 'Overspending';
+    detail = 'In ' + monthName + ', spending exceeded income.';
   } else {
-    ragClass = 'rag-red';
-    status   = 'Tight';
-    detail   = 'Below halfway to your ' + saveCapTarget + '% target.';
+    status = 'Tight';
+    detail = 'In ' + monthName + ', you were below halfway to your ' +
+             saveCapTarget + '% target.';
   }
 
   box.innerHTML =
     '<div class="savecap">' +
-      '<div class="savecap-circle ' + ragClass + '">' +
+      '<div class="savecap-circle rag-' + rag + '">' +
         '<div class="pct">' + Math.round(pct) + '%</div>' +
-        '<div class="lbl">SaveCap</div>' +
+        '<div class="lbl">' + monthName.split(' ')[0] + '</div>' +
       '</div>' +
       '<div class="savecap-text">' +
         '<div class="savecap-status">' + status + '</div>' +
@@ -908,6 +945,110 @@ function renderSaveCap() {
     '</div>';
 }
 
+/* Build a month-keyed object of { income, spend } figures.
+   This is the shared data source for both the headline rating
+   and the new monthly history chart. */
+function saveCapByMonth() {
+  const out = {};
+  transactions.forEach(function (t) {
+    const key = t.date.slice(0, 7);   // "YYYY-MM"
+    if (!out[key]) out[key] = { income: 0, spend: 0 };
+    if (isIncome(t))  out[key].income += t.amount;
+    if (isExpense(t)) out[key].spend  += t.amount;
+  });
+  return out;
+}
+
+/* WIDGET - SaveCap history.
+   Bar chart: one bar per month, height = SaveCap %, colour = RAG.
+   Compared against the user's target (drawn as a dashed line). */
+function renderSaveCapHistoryChart() {
+  const canvas = document.getElementById('saveCapHistoryChart');
+  if (!canvas) return;
+
+  const monthly = saveCapByMonth();
+  const keys = Object.keys(monthly).sort();
+
+  if (saveCapHistoryChart) {
+    saveCapHistoryChart.destroy();
+    saveCapHistoryChart = null;
+  }
+  if (keys.length === 0) return;
+
+  // Build the bar data: % per month, plus matching RAG colours
+  const labels = keys.map(monthLabel);
+  const values = keys.map(function (k) {
+    const m = monthly[k];
+    return m.income > 0
+      ? ((m.income - m.spend) / m.income) * 100
+      : 0;
+  });
+  const colours = keys.map(function (k, i) {
+    const m = monthly[k];
+    const rag = classifySaveCap(values[i], m.income);
+    if (rag === 'green') return '#1f6a4e';
+    if (rag === 'amber') return '#c97b2a';
+    if (rag === 'red')   return '#b23a3a';
+    return '#7a7a7a';
+  });
+
+  saveCapHistoryChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'SaveCap',
+          data: values,
+          backgroundColor: colours,
+          borderRadius: 6
+        },
+        {
+          // The dashed line is rendered as a horizontal line dataset
+          // by using a 'line' type within a bar chart, with all
+          // points equal to the target. Chart.js handles mixing.
+          type: 'line',
+          label: 'Target',
+          data: keys.map(function () { return saveCapTarget; }),
+          borderColor: '#21261f',
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          tension: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { family: 'Hanken Grotesk' }, padding: 10,
+                    boxWidth: 14 }
+        },
+        tooltip: {
+          callbacks: {
+            label: function (ctx) {
+              if (ctx.dataset.label === 'Target') {
+                return ' Target ' + saveCapTarget + '%';
+              }
+              const v = ctx.parsed.y;
+              return ' SaveCap ' + Math.round(v) + '%';
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { callback: function (v) { return v + '%'; } }
+        }
+      }
+    }
+  });
+}
+
 /* The main 'draw everything' function. Called from render() whenever
    data changes. Each widget knows what to do with empty data. */
 function drawCharts() {
@@ -916,6 +1057,7 @@ function drawCharts() {
   renderIncomeChart();
   renderTop5Chart();
   renderSaveCap();
+  renderSaveCapHistoryChart();
 }
 
 /* --------------------------------------------------------------

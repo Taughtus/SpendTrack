@@ -14,7 +14,7 @@
   ===================================================================
 */
 
-const CACHE_VERSION = 'sst-v4';
+const CACHE_VERSION = 'sst-v5';
 
 /* The files the app needs to run. External CDN scripts (Chart.js,
    SheetJS) are fetched fresh from the network when online, then
